@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Notion Pomodoro Widget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --base:#40715a;
+  --accent-soft:#6ba18a;
+  --bg:#f6faf7;
+  --text:#1f2a24;
+  --muted:#6f7c74;
+  --surface:#ffffff;
+  --ring-track:rgba(57,104,82,0.12);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle at top,#ffffff 0%,#eef4ef 55%,#e1eae3 100%);
+  font-family:"Outfit",sans-serif;
+  color:var(--text);
+}
+.widget{
+  width:360px;
+  background:var(--surface);
+  border:1px solid rgba(64,113,90,0.15);
+  border-radius:28px;
+  padding:28px;
+  box-shadow:0 25px 60px rgba(108,132,117,0.2);
+}
+h1{
+  margin:0 0 8px;
+  font-size:1.05rem;
+  letter-spacing:0.25rem;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.timer-card{
+  text-align:center;
+  margin-bottom:22px;
+}
+.progress-ring{
+  width:220px;
+  height:220px;
+  margin:0 auto 18px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at center,var(--surface) 60%,transparent 61%),
+    conic-gradient(from -90deg,var(--base) calc(var(--progress)*1%),var(--ring-track) 0);
+  transition:background 0.4s ease;
+  box-shadow:0 15px 35px rgba(64,113,90,0.2);
+}
+.timer-value{
+  font-size:3.4rem;
+  font-weight:600;
+  letter-spacing:0.2rem;
+  color:var(--text);
+}
+.phase-label{
+  font-size:0.9rem;
+  text-transform:uppercase;
+  letter-spacing:0.4rem;
+  color:var(--muted);
+}
+.controls{
+  display:flex;
+  gap:12px;
+  margin-bottom:18px;
+}
+button{
+  flex:1;
+  padding:12px 16px;
+  border:none;
+  border-radius:999px;
+  font-weight:600;
+  letter-spacing:0.08rem;
+  cursor:pointer;
+  transition:transform 0.15s ease,box-shadow 0.15s ease;
+}
+button.primary{
+  background:var(--base);
+  color:#fff;
+  box-shadow:0 10px 25px rgba(64,113,90,0.3);
+}
+button.secondary{
+  background:#f2f6f3;
+  border:1px solid rgba(64,113,90,0.18);
+  color:var(--text);
+}
+button:active{
+  transform:scale(0.97);
+}
+.status-row{
+  display:flex;
+  justify-content:space-between;
+  font-size:0.9rem;
+  color:var(--muted);
+  margin-bottom:12px;
+}
+.badge{
+  padding:4px 10px;
+  border-radius:999px;
+  background-color:rgba(64,113,90,0.12);
+  border:1px solid rgba(64,113,90,0.25);
+  font-size:0.75rem;
+  letter-spacing:0.2rem;
+  color:var(--base);
+}
+.editor{
+  display:flex;
+  gap:12px;
+  font-size:0.85rem;
+  color:var(--muted);
+}
+.editor label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  flex:1;
+}
+input{
+  background:#f9fbf9;
+  border:1px solid rgba(64,113,90,0.18);
+  border-radius:999px;
+  padding:8px 12px;
+  color:var(--text);
+  text-align:center;
+}
+input:focus{outline:2px solid rgba(64,113,90,0.45);}
+</style>
+</head>
+<body>
+<div class="widget">
+  <h1>POMODORO</h1>
+  <div class="timer-card">
+    <div class="progress-ring" id="ring">
+      <div class="timer-value" id="time">25:00</div>
+    </div>
+    <div class="phase-label" id="label">FOCUS</div>
+  </div>
+  <div class="status-row">
+    <span>サイクル <span id="cycle">01</span>/04</span>
+    <span class="badge" id="state">待機中</span>
+  </div>
+  <div class="controls">
+    <button class="primary" id="start">START</button>
+    <button class="secondary" id="reset">RESET</button>
+  </div>
+  <div class="controls">
+    <button class="secondary" id="skip">SKIP</button>
+    <button class="secondary" id="long">LONG BREAK</button>
+  </div>
+  <div class="editor">
+    <label>集中 (分)
+      <input type="number" id="focusInput" min="5" max="60" value="25">
+    </label>
+    <label>休憩 (分)
+      <input type="number" id="breakInput" min="2" max="30" value="5">
+    </label>
+  </div>
+</div>
+
+<script>
+const focusInput=document.getElementById("focusInput");
+const breakInput=document.getElementById("breakInput");
+const timeEl=document.getElementById("time");
+const labelEl=document.getElementById("label");
+const cycleEl=document.getElementById("cycle");
+const stateEl=document.getElementById("state");
+const ring=document.getElementById("ring");
+const startBtn=document.getElementById("start");
+const resetBtn=document.getElementById("reset");
+const skipBtn=document.getElementById("skip");
+const longBtn=document.getElementById("long");
+
+let timer=null;
+let isRunning=false;
+let phaseIndex=0;
+let remaining=focusInput.value*60;
+let total=remaining;
+let completedCycles=0;
+
+const phases=[
+  {type:"focus",label:"FOCUS"},
+  {type:"short",label:"BREAK"},
+  {type:"focus",label:"FOCUS"},
+  {type:"short",label:"BREAK"},
+  {type:"focus",label:"FOCUS"},
+  {type:"long",label:"LONG BREAK"}
+];
+
+const fmt=num=>num.toString().padStart(2,"0");
+
+function render(){
+  const minutes=Math.floor(remaining/60);
+  const seconds=remaining%60;
+  timeEl.textContent=`${fmt(minutes)}:${fmt(seconds)}`;
+  labelEl.textContent=phases[phaseIndex].label;
+  stateEl.textContent=isRunning?"進行中":"待機中";
+  cycleEl.textContent=fmt(completedCycles+1);
+  const progress=((total-remaining)/total)*100;
+  ring.style.setProperty("--progress",progress.toFixed(2));
+  document.documentElement.style.setProperty("--base",
+    phases[phaseIndex].type==="focus"?"#40715a":"#6ba18a");
+}
+
+function tick(){
+  if(remaining<=0){
+    advancePhase();
+    return;
+  }
+  remaining--;
+  render();
+}
+
+function startStop(){
+  if(isRunning){
+    clearInterval(timer);
+    isRunning=false;
+    startBtn.textContent="START";
+  }else{
+    isRunning=true;
+    timer=setInterval(tick,1000);
+    startBtn.textContent="PAUSE";
+  }
+  render();
+}
+
+function resetTimer(){
+  clearInterval(timer);
+  isRunning=false;
+  startBtn.textContent="START";
+  phaseIndex=0;
+  completedCycles=0;
+  remaining=parseInt(focusInput.value,10)*60;
+  total=remaining;
+  render();
+}
+
+function setPhase(index){
+  phaseIndex=index;
+  const type=phases[phaseIndex].type;
+  const duration=type==="focus"
+    ?parseInt(focusInput.value,10)
+    :type==="short"
+      ?parseInt(breakInput.value,10)
+      :15;
+  total=duration*60;
+  remaining=total;
+}
+
+function advancePhase(){
+  phaseIndex++;
+  if(phaseIndex>=phases.length){
+    phaseIndex=0;
+    completedCycles=(completedCycles+1)%4;
+  }
+  setPhase(phaseIndex);
+  render();
+}
+
+focusInput.addEventListener("change",()=>{
+  if(phases[phaseIndex].type==="focus"){
+    total=parseInt(focusInput.value,10)*60;
+    remaining=total;
+    render();
+  }
+});
+breakInput.addEventListener("change",()=>{
+  if(phases[phaseIndex].type==="short"){
+    total=parseInt(breakInput.value,10)*60;
+    remaining=total;
+    render();
+  }
+});
+
+startBtn.addEventListener("click",startStop);
+resetBtn.addEventListener("click",resetTimer);
+skipBtn.addEventListener("click",advancePhase);
+longBtn.addEventListener("click",()=>{
+  phaseIndex=phases.findIndex(p=>p.type==="long");
+  setPhase(phaseIndex);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
